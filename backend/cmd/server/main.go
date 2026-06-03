@@ -39,6 +39,7 @@ func main() {
 	bookHandler := handlers.NewBookHandler(pool, defaultUserID.String())
 	chapterHandler := handlers.NewChapterHandler(pool)
 	dictionaryHandler := handlers.NewDictionaryHandler(pool, defaultUserID.String())
+	versionHandler := handlers.NewVersionHandler(pool)
 
 	// Register routes using Go 1.22+ method patterns.
 	mux := http.NewServeMux()
@@ -67,6 +68,12 @@ func main() {
 	mux.HandleFunc("PUT /api/chapters/{id}", chapterHandler.UpdateChapter)
 	mux.HandleFunc("DELETE /api/chapters/{id}", chapterHandler.DeleteChapter)
 	mux.HandleFunc("PUT /api/chapters/reorder", chapterHandler.ReorderChapters)
+
+	// Version / revision history routes
+	mux.HandleFunc("POST /api/chapters/{id}/versions", versionHandler.CreateVersion)
+	mux.HandleFunc("GET /api/chapters/{id}/versions", versionHandler.ListVersions)
+	mux.HandleFunc("GET /api/versions/{version_id}", versionHandler.GetVersion)
+	mux.HandleFunc("DELETE /api/versions/{version_id}", versionHandler.DeleteVersion)
 
 	// Apply middleware chain: CORS → Logger → JSONContent → mux
 	handler := middleware.CORS(middleware.Logger(middleware.JSONContent(mux)))
