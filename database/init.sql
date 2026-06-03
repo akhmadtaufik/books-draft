@@ -52,11 +52,26 @@ CREATE INDEX IF NOT EXISTS idx_chapters_content ON chapters USING GIN (content);
 -- 4. user_dictionaries (Phase 2 – custom spell-check words)
 -- -----------------------------------------------------------
 CREATE TABLE IF NOT EXISTS user_dictionaries (
-    id      UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    word    VARCHAR(255) NOT NULL
+    id         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id    UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    word       VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP   NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_user_dict_user_id ON user_dictionaries(user_id);
 -- Prevent duplicate words per user
 CREATE UNIQUE INDEX IF NOT EXISTS idx_user_dict_unique_word ON user_dictionaries(user_id, word);
+
+-- -----------------------------------------------------------
+-- 5. chapter_versions (Revision History snapshots)
+-- -----------------------------------------------------------
+CREATE TABLE IF NOT EXISTS chapter_versions (
+    id            UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    chapter_id    UUID        NOT NULL REFERENCES chapters(id) ON DELETE CASCADE,
+    content       JSONB       NOT NULL DEFAULT '{}'::jsonb,
+    snapshot_type VARCHAR(50) NOT NULL CHECK (snapshot_type IN ('session_end', 'manual_milestone')),
+    created_at    TIMESTAMP   NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_chapter_versions_chapter_id ON chapter_versions(chapter_id);
+CREATE INDEX IF NOT EXISTS idx_chapter_versions_created_at ON chapter_versions(chapter_id, created_at DESC);
