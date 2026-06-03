@@ -1,7 +1,12 @@
 <template>
   <div class="preview-container">
     <div class="preview-header">
-      <h2>{{ previewData?.title || 'Book Preview' }}</h2>
+      <div class="preview-header-left">
+        <h2>{{ previewData?.title || 'Book Preview' }}</h2>
+        <div v-if="previewData && !isLoading" class="preview-stats">
+          Total Book Stats: {{ totalWords.toLocaleString() }} words | ⏱️ Approx. {{ totalReadingTimeStr }} read
+        </div>
+      </div>
       <button @click="$emit('close')" class="btn-close">
         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
         <span>Close Preview</span>
@@ -32,8 +37,9 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { get } from '../composables/useApi.js'
+import { calculateReadingTime } from '../composables/useReadingTime.js'
 import PreviewRenderer from './PreviewRenderer.vue'
 
 const props = defineProps({
@@ -45,6 +51,31 @@ const emit = defineEmits(['close'])
 const previewData = ref(null)
 const isLoading = ref(true)
 const error = ref(null)
+
+const totalWords = computed(() => {
+  if (!previewData.value || !previewData.value.chapters) return 0
+  let total = 0
+  for (const chapter of previewData.value.chapters) {
+    const stats = calculateReadingTime(chapter.content)
+    total += stats.wordCount
+  }
+  return total
+})
+
+const totalReadingTimeStr = computed(() => {
+  const readingTime = Math.max(1, Math.round(totalWords.value / 200))
+  const hours = Math.floor(readingTime / 60)
+  const mins = readingTime % 60
+  
+  let formattedTime = ''
+  if (hours > 0) {
+    formattedTime += `${hours} hour${hours > 1 ? 's' : ''} `
+  }
+  if (mins > 0 || hours === 0) {
+    formattedTime += `${mins} min${mins > 1 ? 's' : ''}`
+  }
+  return formattedTime.trim()
+})
 
 onMounted(async () => {
   try {
@@ -79,11 +110,23 @@ onMounted(async () => {
   box-shadow: 0 1px 3px rgba(0,0,0,0.05);
 }
 
+.preview-header-left {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
 .preview-header h2 {
   margin: 0;
   font-family: 'Inter', sans-serif;
   font-size: 1.25rem;
   font-weight: 600;
+}
+
+.preview-stats {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.85rem;
+  color: #52525b;
 }
 
 .btn-close {
