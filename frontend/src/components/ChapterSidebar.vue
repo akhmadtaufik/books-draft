@@ -40,6 +40,15 @@
         New Chapter
       </button>
     </div>
+
+    <!-- Delete Confirmation Modal -->
+    <DeleteModal
+      :isOpen="isDeleteModalOpen"
+      title="Delete Chapter"
+      message="Are you sure you want to delete this chapter? This cannot be undone."
+      @confirm="executeDelete"
+      @cancel="isDeleteModalOpen = false; itemToDeleteId = null"
+    />
   </aside>
 </template>
 
@@ -47,6 +56,7 @@
 import { ref, watch, onMounted } from 'vue'
 import { VueDraggable } from 'vue-draggable-plus'
 import { get, post, put, del } from '../composables/useApi.js'
+import DeleteModal from './DeleteModal.vue'
 
 const props = defineProps({
   bookId: { type: String, required: true },
@@ -59,6 +69,9 @@ const chapters = ref([])
 const isLoading = ref(false)
 const error = ref(null)
 const isCreating = ref(false)
+
+const isDeleteModalOpen = ref(false)
+const itemToDeleteId = ref(null)
 
 async function fetchChapters() {
   if (!props.bookId) return
@@ -108,8 +121,15 @@ async function createChapter() {
   }
 }
 
-async function confirmDelete(chapterId) {
-  if (!confirm('Are you sure you want to delete this chapter? This cannot be undone.')) return
+function confirmDelete(chapterId) {
+  itemToDeleteId.value = chapterId
+  isDeleteModalOpen.value = true
+}
+
+async function executeDelete() {
+  const chapterId = itemToDeleteId.value
+  if (!chapterId) return
+  isDeleteModalOpen.value = false
   
   try {
     await del(`/api/chapters/${chapterId}`)
@@ -122,6 +142,13 @@ async function confirmDelete(chapterId) {
     console.error('Failed to delete chapter:', err)
   }
 }
+
+defineExpose({
+  updateChapterTitle: (id, newTitle) => {
+    const chapter = chapters.value.find(c => c.id === id)
+    if (chapter) chapter.title = newTitle
+  }
+})
 </script>
 
 <style scoped>
