@@ -76,7 +76,7 @@
           <span v-else-if="lastSavedAt" class="status-saved">Saved ✓</span>
         </div>
         <div class="status-right" v-if="editor">
-          <span>{{ editor.storage.characterCount?.words() || 0 }} words</span>
+          <span>Words: {{ editor.storage.characterCount?.words() || 0 }} | ⏱️ Est. reading time: {{ estimatedReadingTime }}</span>
           <span>{{ editor.storage.characterCount?.characters() || 0 }} chars</span>
         </div>
       </div>
@@ -101,6 +101,7 @@ import CharacterCount from '@tiptap/extension-character-count'
 import { get, put, post } from '../composables/useApi.js'
 import { useAutosave } from '../composables/useAutosave.js'
 import { useSpellCheck } from '../composables/useSpellCheck.js'
+import { calculateReadingTime } from '../composables/useReadingTime.js'
 import { SpellCheckExtension, applySpellDecorations } from '../extensions/spellCheckExtension.js'
 import VersionHistory from './VersionHistory.vue'
 
@@ -112,10 +113,12 @@ const emit = defineEmits(['title-updated'])
 const isLoading = ref(false)
 const error = ref(null)
 const chapterTitle = ref('')
+const isDirty = ref(false)
 
 const tooltip = ref({ show: false, x: 0, y: 0, word: '' })
 const showVersionHistory = ref(false)
 const isSavingMilestone = ref(false)
+const estimatedReadingTime = ref('1 min')
 
 const editor = useEditor({
   extensions: [
@@ -149,13 +152,20 @@ watch(misspelledRanges, (ranges) => {
 
 // Combined update handler
 function onEditorUpdate() {
+  isDirty.value = true
   triggerSave()
   if (editor.value) {
     checkDocument(editor.value.state.doc)
+    // Update reading time efficiently without blocking the event loop
+    requestAnimationFrame(() => {
+      const stats = calculateReadingTime(editor.value.getJSON())
+      estimatedReadingTime.value = stats.formattedTime
+    })
   }
 }
 
 function onTitleUpdate() {
+  isDirty.value = true
   hasUnsavedChanges.value = true
   // Emit to parent immediately for sidebar reactivity
   emit('title-updated', { id: props.chapterId, title: chapterTitle.value })
@@ -219,8 +229,12 @@ async function loadChapter() {
     
     if (editor.value) {
       editor.value.commands.setContent(initialContent)
-      // Initial spell check
+      // Reset isDirty since we just loaded it
+      isDirty.value = false
+      // Initial spell check and reading time
       checkDocument(editor.value.state.doc)
+      const stats = calculateReadingTime(editor.value.getJSON())
+      estimatedReadingTime.value = stats.formattedTime
     }
   } catch (err) {
     error.value = err.message
@@ -243,8 +257,14 @@ if (props.chapterId) {
 }
 
 async function saveSessionSnapshot(chapterId) {
+  if (!isDirty.value) {
+    console.log(`[VersionHistory] No changes made in this session (Chapter ${chapterId}). Skipping snapshot generation.`)
+    return
+  }
+
   try {
     await post(`/api/chapters/${chapterId}/versions`, { snapshot_type: 'session_end' })
+    isDirty.value = false // Reset after successful save
   } catch (err) {
     console.warn('[VersionHistory] Session snapshot failed:', err)
   }
@@ -255,6 +275,7 @@ async function saveManualMilestone() {
   isSavingMilestone.value = true
   try {
     await post(`/api/chapters/${props.chapterId}/versions`, { snapshot_type: 'manual_milestone' })
+    isDirty.value = false // Reset since current state is safely backed up
   } catch (err) {
     console.error('[VersionHistory] Milestone save failed:', err)
   } finally {
