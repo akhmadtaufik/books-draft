@@ -90,6 +90,15 @@
         </div>
       </div>
     </div>
+    
+    <!-- Delete Confirmation Modal -->
+    <DeleteModal
+      :isOpen="isDeleteModalOpen"
+      :title="deleteModalTitle"
+      :message="deleteModalMessage"
+      @confirm="executeDelete"
+      @cancel="isDeleteModalOpen = false; versionToDelete = null"
+    />
   </Teleport>
 </template>
 
@@ -98,6 +107,7 @@ import { ref, watch, onBeforeUnmount } from 'vue'
 import { useEditor, EditorContent } from '@tiptap/vue-3'
 import StarterKit from '@tiptap/starter-kit'
 import { get, put, del } from '../composables/useApi.js'
+import DeleteModal from './DeleteModal.vue'
 
 const props = defineProps({
   chapterId: { type: String, required: true }
@@ -113,6 +123,11 @@ const isLoading = ref(false)
 const isLoadingContent = ref(false)
 const isRestoring = ref(false)
 const deletingId = ref(null)
+
+const isDeleteModalOpen = ref(false)
+const versionToDelete = ref(null)
+const deleteModalTitle = ref('')
+const deleteModalMessage = ref('')
 
 // ── Read-only preview editor ───────────────────────────────────────
 const previewEditor = useEditor({
@@ -171,12 +186,18 @@ async function restoreVersion() {
 }
 
 // ── Delete a specific version ─────────────────────────────────────
-async function deleteVersion(version) {
+function deleteVersion(version) {
+  versionToDelete.value = version
   const label = version.snapshotType === 'manual_milestone' ? 'Milestone' : 'Session'
-  const confirmed = window.confirm(
-    `Delete this ${label} snapshot from ${formatDate(version.createdAt)}?\n\nThis action cannot be undone.`
-  )
-  if (!confirmed) return
+  deleteModalTitle.value = `Delete ${label}`
+  deleteModalMessage.value = `Are you sure you want to delete this ${label.toLowerCase()} snapshot from ${formatDate(version.createdAt)}?\n\nThis action cannot be undone.`
+  isDeleteModalOpen.value = true
+}
+
+async function executeDelete() {
+  const version = versionToDelete.value
+  if (!version) return
+  isDeleteModalOpen.value = false
 
   deletingId.value = version.id
   try {
