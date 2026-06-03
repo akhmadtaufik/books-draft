@@ -71,3 +71,20 @@ type UserDictionary struct {
 type DictionaryWordRequest struct {
 	Word string `json:"word"`
 }
+
+// ChapterVersion is a lightweight version record (no content) for list endpoints.
+type ChapterVersion struct {
+	ID           uuid.UUID `json:"id"`
+	ChapterID    uuid.UUID `json:"chapterId"`
+	SnapshotType string    `json:"snapshotType"`
+	CreatedAt    time.Time `json:"createdAt"`
+}
+
+// ChapterVersionFull includes the full JSONB content for a single version fetch.
+type ChapterVersionFull struct {
+	ID           uuid.UUID       `json:"id"`
+	ChapterID    uuid.UUID       `json:"chapterId"`
+	Content      json.RawMessage `json:"content"`
+	SnapshotType string          `json:"snapshotType"`
+	CreatedAt    time.Time       `json:"createdAt"`
+}
