@@ -1,0 +1,35 @@
+# Novel Drafting App – `.gitignore`
+
+# Dependencies
+node_modules/
+frontend/node_modules/
+
+# Build output
+frontend/dist/
+backend/novel-api
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker volumes
+pg_data/
+
+# Go
+backend/tmp/
+
+# Other
+prd.md
+backend/build_trace.log
+
