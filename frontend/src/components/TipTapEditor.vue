@@ -107,6 +107,7 @@ import VersionHistory from './VersionHistory.vue'
 const props = defineProps({
   chapterId: { type: String, required: true }
 })
+const emit = defineEmits(['title-updated'])
 
 const isLoading = ref(false)
 const error = ref(null)
@@ -156,6 +157,9 @@ function onEditorUpdate() {
 
 function onTitleUpdate() {
   hasUnsavedChanges.value = true
+  // Emit to parent immediately for sidebar reactivity
+  emit('title-updated', { id: props.chapterId, title: chapterTitle.value })
+  
   // Trigger title save immediately or debounce
   put(`/api/chapters/${props.chapterId}`, { title: chapterTitle.value })
     .then(() => {
