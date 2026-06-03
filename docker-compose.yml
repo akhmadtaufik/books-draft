@@ -1,0 +1,64 @@
+# ==============================================================
+# Novel Drafting App – Local Development Environment
+# ==============================================================
+# Usage:  docker compose up --build
+# ==============================================================
+
+services:
+  # --------------------------------------------------------
+  # PostgreSQL Database
+  # --------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    container_name: novel-db
+    restart: unless-stopped
+    # Exposing port to host so you can use DBeaver
+    # Format: "HOST_PORT:CONTAINER_PORT"
+    ports:
+      - "15432:5432"
+    env_file:
+      - .env
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # --------------------------------------------------------
+  # Go Backend API (placeholder – hot-reload via Air)
+  # --------------------------------------------------------
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: novel-api
+    restart: unless-stopped
+    ports:
+      - "8081:8080"
+    env_file:
+      - .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # --------------------------------------------------------
+  # Vue Frontend (placeholder – Vite dev server)
+  # --------------------------------------------------------
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: novel-frontend
+    restart: unless-stopped
+    ports:
+      - "5173:5173"
+    env_file:
+      - .env
+    depends_on:
+      - backend
+
+volumes:
+  pg_data:
