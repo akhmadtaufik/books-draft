@@ -29,6 +29,7 @@
         
         <template v-else-if="currentBookId">
           <ChapterSidebar 
+            ref="sidebarRef"
             :bookId="currentBookId" 
             :activeChapterId="currentChapterId"
             @select="currentChapterId = $event"
@@ -40,6 +41,7 @@
               v-if="currentChapterId" 
               :chapterId="currentChapterId" 
               :key="currentChapterId"
+              @title-updated="onChapterTitleUpdated"
             />
             <div v-else class="empty-editor-state">
               <p>Select a chapter from the sidebar or create a new one to start writing.</p>
@@ -63,6 +65,7 @@ import BookPreview from './components/BookPreview.vue'
 const currentBookId = ref(null)
 const currentChapterId = ref(null)
 const isPreviewMode = ref(false)
+const sidebarRef = ref(null)
 
 const newBookTitle = ref('')
 const isLoading = ref(true)
@@ -97,6 +100,12 @@ async function createInitialBook() {
     console.error('Failed to create book:', err)
   } finally {
     isLoading.value = false
+  }
+}
+
+function onChapterTitleUpdated({ id, title }) {
+  if (sidebarRef.value) {
+    sidebarRef.value.updateChapterTitle(id, title)
   }
 }
 </script>
