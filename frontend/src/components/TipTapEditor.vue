@@ -42,6 +42,13 @@
         <button @click="editor.chain().focus().redo().run()" :disabled="!editor.can().redo()">
           Redo
         </button>
+        <div class="divider"></div>
+        <button @click="saveManualMilestone" :disabled="isSavingMilestone" class="btn-milestone">
+          {{ isSavingMilestone ? '...' : '⭐ Save Milestone' }}
+        </button>
+        <button @click="showVersionHistory = true" class="btn-history">
+          ⏱ History
+        </button>
       </div>
 
       <!-- Editor Content -->
@@ -75,6 +82,14 @@
       </div>
     </div>
   </div>
+
+  <!-- Revision History Modal -->
+  <VersionHistory
+    v-if="showVersionHistory"
+    :chapterId="props.chapterId"
+    @close="showVersionHistory = false"
+    @restored="onVersionRestored"
+  />
 </template>
 
 <script setup>
@@ -83,10 +98,11 @@ import { useEditor, EditorContent } from '@tiptap/vue-3'
 import StarterKit from '@tiptap/starter-kit'
 import CharacterCount from '@tiptap/extension-character-count'
 
-import { get, put } from '../composables/useApi.js'
+import { get, put, post } from '../composables/useApi.js'
 import { useAutosave } from '../composables/useAutosave.js'
 import { useSpellCheck } from '../composables/useSpellCheck.js'
 import { SpellCheckExtension, applySpellDecorations } from '../extensions/spellCheckExtension.js'
+import VersionHistory from './VersionHistory.vue'
 
 const props = defineProps({
   chapterId: { type: String, required: true }
@@ -97,6 +113,8 @@ const error = ref(null)
 const chapterTitle = ref('')
 
 const tooltip = ref({ show: false, x: 0, y: 0, word: '' })
+const showVersionHistory = ref(false)
+const isSavingMilestone = ref(false)
 
 const editor = useEditor({
   extensions: [
@@ -207,14 +225,51 @@ async function loadChapter() {
   }
 }
 
-watch(() => props.chapterId, loadChapter)
+watch(() => props.chapterId, (newId, oldId) => {
+  // Save session snapshot for the chapter we're leaving
+  if (oldId) {
+    saveSessionSnapshot(oldId)
+  }
+  loadChapter()
+})
 
 // Initial load if component mounted with a chapterId
 if (props.chapterId) {
   loadChapter()
 }
 
+async function saveSessionSnapshot(chapterId) {
+  try {
+    await post(`/api/chapters/${chapterId}/versions`, { snapshot_type: 'session_end' })
+  } catch (err) {
+    console.warn('[VersionHistory] Session snapshot failed:', err)
+  }
+}
+
+async function saveManualMilestone() {
+  if (!props.chapterId || isSavingMilestone.value) return
+  isSavingMilestone.value = true
+  try {
+    await post(`/api/chapters/${props.chapterId}/versions`, { snapshot_type: 'manual_milestone' })
+  } catch (err) {
+    console.error('[VersionHistory] Milestone save failed:', err)
+  } finally {
+    isSavingMilestone.value = false
+  }
+}
+
+async function onVersionRestored(restoredContent) {
+  if (editor.value) {
+    editor.value.commands.setContent(restoredContent)
+    triggerSave()
+  }
+}
+
 onBeforeUnmount(() => {
+  // Fire session snapshot on unmount (user navigated away)
+  if (props.chapterId) {
+    saveSessionSnapshot(props.chapterId)
+  }
   if (editor.value) {
     editor.value.destroy()
   }
@@ -314,6 +369,24 @@ onBeforeUnmount(() => {
   height: 20px;
   background-color: #3f3f46;
   margin: 0 0.5rem;
+}
+
+.btn-milestone {
+  background: rgba(251, 191, 36, 0.1) !important;
+  color: #fbbf24 !important;
+  border-color: rgba(251, 191, 36, 0.3) !important;
+}
+.btn-milestone:hover:not(:disabled) {
+  background: rgba(251, 191, 36, 0.2) !important;
+}
+
+.btn-history {
+  background: rgba(99, 102, 241, 0.1) !important;
+  color: #818cf8 !important;
+  border-color: rgba(99, 102, 241, 0.3) !important;
+}
+.btn-history:hover {
+  background: rgba(99, 102, 241, 0.2) !important;
 }
 
 .editor-scroll-area {
