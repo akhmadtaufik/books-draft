@@ -31,5 +31,6 @@ backend/tmp/
 
 # Other
 prd.md
+cache/
 backend/build_trace.log
 
