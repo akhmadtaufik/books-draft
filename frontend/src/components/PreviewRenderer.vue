@@ -27,14 +27,18 @@ onBeforeUnmount(() => {
 <style>
 /* Scoped to the preview renderer to avoid conflicting with the main editor */
 .preview-tiptap {
-  font-size: 1.125rem;
-  line-height: 1.8;
+  font-size: 0.95rem;
+  line-height: 1.6;
   color: #27272a;
 }
 
 .preview-tiptap p {
-  margin-bottom: 1.5em;
+  margin-bottom: 1.2em;
   color: #111827 !important;
+  text-align: justify;
+  break-inside: auto;
+  orphans: 2;
+  widows: 2;
 }
 
 .preview-tiptap h1, .preview-tiptap h2, .preview-tiptap h3 {
@@ -42,6 +46,8 @@ onBeforeUnmount(() => {
   margin-top: 2em;
   margin-bottom: 1em;
   font-family: 'Inter', sans-serif;
+  break-after: avoid;
+  break-inside: avoid;
 }
 
 .preview-tiptap blockquote {
@@ -49,5 +55,13 @@ onBeforeUnmount(() => {
   padding-left: 1rem;
   color: #52525b;
   font-style: italic;
+  break-inside: avoid;
+}
+
+.preview-tiptap img, 
+.preview-tiptap pre,
+.preview-tiptap ul,
+.preview-tiptap ol {
+  break-inside: avoid;
 }
 </style>
