@@ -12,6 +12,9 @@
         </div>
         
         <div class="header-right" v-if="currentBookId">
+          <button @click="isStoryBibleOpen = !isStoryBibleOpen" class="btn-story-bible" :class="{ active: isStoryBibleOpen }">
+            📖 Story Bible
+          </button>
           <button @click="isPreviewMode = true" class="btn-primary">
             Preview Book
           </button>
@@ -47,6 +50,12 @@
               <p>Select a chapter from the sidebar or create a new one to start writing.</p>
             </div>
           </section>
+
+          <StoryBible
+            :bookId="currentBookId"
+            :isOpen="isStoryBibleOpen"
+            @toggle="isStoryBibleOpen = !isStoryBibleOpen"
+          />
         </template>
         
         <div v-if="isLoading" class="loading-app">Loading...</div>
@@ -61,10 +70,12 @@ import { get, post } from './composables/useApi.js'
 import ChapterSidebar from './components/ChapterSidebar.vue'
 import TipTapEditor from './components/TipTapEditor.vue'
 import BookPreview from './components/BookPreview.vue'
+import StoryBible from './components/StoryBible.vue'
 
 const currentBookId = ref(null)
 const currentChapterId = ref(null)
 const isPreviewMode = ref(false)
+const isStoryBibleOpen = ref(false)
 const sidebarRef = ref(null)
 
 const newBookTitle = ref('')
@@ -143,6 +154,30 @@ body {
 .btn-primary:hover {
   background-color: #d4d4d8;
 }
+
+.btn-story-bible {
+  background: rgba(139, 92, 246, 0.1);
+  color: #c4b5fd;
+  border: 1px solid rgba(139, 92, 246, 0.3);
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: 'Inter', sans-serif;
+}
+
+.btn-story-bible:hover {
+  background: rgba(139, 92, 246, 0.2);
+  border-color: rgba(139, 92, 246, 0.5);
+}
+
+.btn-story-bible.active {
+  background: rgba(139, 92, 246, 0.25);
+  border-color: #8b5cf6;
+  color: #e4e4e7;
+}
 </style>
 
 <style scoped>
@@ -165,6 +200,12 @@ body {
   display: flex;
   align-items: center;
   gap: 1rem;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
 }
 
 .app-header h1 {
