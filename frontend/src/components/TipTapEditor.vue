@@ -53,12 +53,14 @@
 
       <!-- Editor Content -->
       <div class="editor-scroll-area" @click="onEditorClick">
-        <input 
+        <textarea 
           v-model="chapterTitle" 
-          @input="onTitleUpdate"
+          @input="handleTitleInput"
           class="chapter-title-input" 
           placeholder="Chapter Title"
-        />
+          rows="1"
+          ref="titleTextarea"
+        ></textarea>
         <editor-content :editor="editor" class="tiptap-content" spellcheck="false" />
       </div>
 
@@ -93,7 +95,7 @@
 </template>
 
 <script setup>
-import { ref, watch, onBeforeUnmount, toRef } from 'vue'
+import { ref, watch, onBeforeUnmount, toRef, nextTick } from 'vue'
 import { useEditor, EditorContent } from '@tiptap/vue-3'
 import StarterKit from '@tiptap/starter-kit'
 import CharacterCount from '@tiptap/extension-character-count'
@@ -119,6 +121,15 @@ const tooltip = ref({ show: false, x: 0, y: 0, word: '' })
 const showVersionHistory = ref(false)
 const isSavingMilestone = ref(false)
 const estimatedReadingTime = ref('1 min')
+
+const titleTextarea = ref(null)
+
+function handleTitleInput(event) {
+  const el = event.target
+  el.style.height = 'auto'
+  el.style.height = el.scrollHeight + 'px'
+  onTitleUpdate()
+}
 
 const editor = useEditor({
   extensions: [
@@ -222,6 +233,13 @@ async function loadChapter() {
   try {
     const chapter = await get(`/api/chapters/${props.chapterId}`)
     chapterTitle.value = chapter.title || ''
+    
+    nextTick(() => {
+      if (titleTextarea.value) {
+        titleTextarea.value.style.height = 'auto'
+        titleTextarea.value.style.height = titleTextarea.value.scrollHeight + 'px'
+      }
+    })
     
     // Check for draft recovery
     const draft = recoverDraft(new Date(chapter.updatedAt).getTime())
@@ -433,6 +451,10 @@ onBeforeUnmount(() => {
   margin-bottom: 2rem;
   outline: none;
   transition: border-color 0.2s;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow: hidden;
+  resize: none;
 }
 
 .chapter-title-input:focus {
