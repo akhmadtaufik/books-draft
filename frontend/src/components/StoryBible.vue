@@ -4,7 +4,6 @@
     <button class="toggle-btn" @click="$emit('toggle')" :title="isOpen ? 'Close Story Bible' : 'Open Story Bible'">
       <svg v-if="isOpen" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
       <svg v-else xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
-      <span class="toggle-label" v-if="!isOpen">📖</span>
     </button>
 
     <!-- Panel Content (only when open) -->
@@ -252,55 +251,49 @@ onUnmounted(() => {
   flex-direction: row;
   height: 100%;
   transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  width: 40px;
+  width: 0;
 }
 
 .story-bible.open {
-  width: 360px;
+  width: 320px;
 }
 
 /* Toggle button */
 .toggle-btn {
   position: absolute;
-  left: 0;
+  left: -32px;
   top: 50%;
   transform: translateY(-50%);
-  width: 36px;
-  height: 64px;
-  background: #1c1c20;
-  border: 1px solid #27272a;
-  border-right: none;
+  width: 32px;
+  height: 32px;
+  background: transparent;
+  border: 1px solid transparent;
   border-radius: 6px 0 0 6px;
   color: #a1a1aa;
   cursor: pointer;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0.25rem;
-  z-index: 10;
+  z-index: 50;
   transition: all 0.2s;
 }
 
 .toggle-btn:hover {
   color: #e4e4e7;
-  background: #27272a;
-}
-
-.toggle-label {
-  font-size: 1rem;
-  line-height: 1;
+  background: rgba(39, 39, 42, 0.8);
 }
 
 /* Panel content */
 .panel-content {
-  margin-left: 36px;
+  margin-left: 0;
   flex: 1;
   display: flex;
   flex-direction: column;
   background: #121214;
   border-left: 1px solid #27272a;
   overflow: hidden;
+  width: 320px;
+  min-width: 320px;
 }
 
 .panel-header {
