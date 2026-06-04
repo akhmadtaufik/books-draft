@@ -40,6 +40,7 @@ func main() {
 	chapterHandler := handlers.NewChapterHandler(pool)
 	dictionaryHandler := handlers.NewDictionaryHandler(pool, defaultUserID.String())
 	versionHandler := handlers.NewVersionHandler(pool)
+	notesHandler := handlers.NewNotesHandler(pool)
 
 	// Register routes using Go 1.22+ method patterns.
 	mux := http.NewServeMux()
@@ -74,6 +75,12 @@ func main() {
 	mux.HandleFunc("GET /api/chapters/{id}/versions", versionHandler.ListVersions)
 	mux.HandleFunc("GET /api/versions/{version_id}", versionHandler.GetVersion)
 	mux.HandleFunc("DELETE /api/versions/{version_id}", versionHandler.DeleteVersion)
+
+	// Book notes (Story Bible – Character Sheets & Worldbuilding Wiki)
+	mux.HandleFunc("GET /api/books/{book_id}/notes", notesHandler.ListNotes)
+	mux.HandleFunc("POST /api/books/{book_id}/notes", notesHandler.CreateNote)
+	mux.HandleFunc("PUT /api/notes/{note_id}", notesHandler.UpdateNote)
+	mux.HandleFunc("DELETE /api/notes/{note_id}", notesHandler.DeleteNote)
 
 	// Apply middleware chain: CORS → Logger → JSONContent → mux
 	handler := middleware.CORS(middleware.Logger(middleware.JSONContent(mux)))
