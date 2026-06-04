@@ -88,3 +88,26 @@ type ChapterVersionFull struct {
 	SnapshotType string          `json:"snapshotType"`
 	CreatedAt    time.Time       `json:"createdAt"`
 }
+
+// BookNote represents a row in the book_notes table (character sheet or worldbuilding entry).
+type BookNote struct {
+	ID        uuid.UUID       `json:"id"`
+	BookID    uuid.UUID       `json:"bookId"`
+	Title     string          `json:"title"`
+	Type      string          `json:"type"`
+	Content   json.RawMessage `json:"content"`
+	UpdatedAt time.Time       `json:"updatedAt"`
+}
+
+// CreateNoteRequest is the payload for creating a new book note.
+type CreateNoteRequest struct {
+	Title   string          `json:"title"`
+	Type    string          `json:"type"`
+	Content json.RawMessage `json:"content"`
+}
+
+// UpdateNoteRequest is the payload for updating an existing book note.
+type UpdateNoteRequest struct {
+	Title   string          `json:"title"`
+	Content json.RawMessage `json:"content"`
+}
