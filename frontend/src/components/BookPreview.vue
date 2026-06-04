@@ -420,7 +420,12 @@ onBeforeUnmount(() => {
 }
 
 .preview-chapter {
+  break-before: column;
   break-inside: auto;
+}
+
+.preview-chapter:first-child {
+  break-before: auto;
 }
 
 .chapter-heading {
@@ -431,21 +436,10 @@ onBeforeUnmount(() => {
   margin-bottom: 0.8rem;
   color: #18181b;
   break-after: avoid; 
-  break-before: page; 
-}
-
-/* Ensure the first chapter doesn't have an empty page before it */
-.preview-chapter:first-child .chapter-heading {
-  break-before: auto;
 }
 
 .chapter-divider {
-  text-align: center;
-  margin: 1.5rem 0;
-  color: #a1a1aa;
-  letter-spacing: 0.5em;
-  break-before: avoid; 
-  break-after: page;
+  display: none;
 }
 
 /* Navigation buttons */
