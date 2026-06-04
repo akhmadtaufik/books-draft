@@ -156,9 +156,9 @@ defineExpose({
 .sidebar {
   display: flex;
   flex-direction: column;
-  width: 260px;
-  min-width: 260px;
-  max-width: 260px;
+  width: 320px;
+  min-width: 320px;
+  max-width: 320px;
   background-color: #121214;
   border-right: 1px solid #27272a;
   color: #e4e4e7;
