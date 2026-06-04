@@ -27,13 +27,13 @@ onBeforeUnmount(() => {
 <style>
 /* Scoped to the preview renderer to avoid conflicting with the main editor */
 .preview-tiptap {
-  font-size: 0.95rem;
-  line-height: 1.6;
+  font-size: 11px;
+  line-height: 1.55;
   color: #27272a;
 }
 
 .preview-tiptap p {
-  margin-bottom: 1.2em;
+  margin-bottom: 0.8em;
   color: #111827 !important;
   text-align: justify;
   break-inside: auto;
@@ -43,8 +43,8 @@ onBeforeUnmount(() => {
 
 .preview-tiptap h1, .preview-tiptap h2, .preview-tiptap h3 {
   color: #18181b;
-  margin-top: 2em;
-  margin-bottom: 1em;
+  margin-top: 1.2em;
+  margin-bottom: 0.5em;
   font-family: 'Inter', sans-serif;
   break-after: avoid;
   break-inside: avoid;
