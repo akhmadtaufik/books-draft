@@ -3,6 +3,7 @@ package middleware
 import (
 	"log"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -50,10 +51,13 @@ func Logger(next http.Handler) http.Handler {
 	})
 }
 
-// JSONContent sets the Content-Type header to application/json for all responses.
+// JSONContent sets the Content-Type header to application/json for all responses,
+// except export endpoints that serve binary files.
 func JSONContent(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
+		if !strings.Contains(r.URL.Path, "/export/") {
+			w.Header().Set("Content-Type", "application/json")
+		}
 		next.ServeHTTP(w, r)
 	})
 }
