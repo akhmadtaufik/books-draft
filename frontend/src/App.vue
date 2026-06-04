@@ -96,13 +96,11 @@ async function exportToPdf() {
   isExportingPdf.value = true
   
   try {
-    // 1. Fetch book data
     const previewData = await get(`/api/books/${currentBookId.value}/preview`)
     
     let chaptersHtml = ''
     let tocHtml = '<div class="toc-page"><h2>Daftar Isi</h2><ul class="toc-list">'
     
-    // 2. Build the Chapters and TOC HTML
     previewData.chapters.forEach((chapter, index) => {
       let bodyHtml = ''
       if (chapter.content && Object.keys(chapter.content).length > 0) {
@@ -115,13 +113,21 @@ async function exportToPdf() {
       
       const chapterId = `chapter-${index + 1}`
       
-      // Add to TOC (Paged.js will fill in the page numbers automatically via CSS)
-      tocHtml += `<li><a href="#${chapterId}"><span class="toc-text">${chapter.title || 'Untitled'}</span></a></li>`
+      // TOC HTML using Flexbox for dots and an empty span for JS to inject the page number
+      tocHtml += `
+        <li>
+          <a href="#${chapterId}">
+            <span class="toc-text">${chapter.title || 'Untitled'}</span>
+            <span class="toc-dots"></span>
+            <span class="toc-page-num" data-target="${chapterId}"></span>
+          </a>
+        </li>
+      `
       
-      // Add to Content
+      // Clean Chapter HTML (ID is purely on the H1 now)
       chaptersHtml += `
-        <div class="chapter" id="${chapterId}">
-          <h1 class="chapter-title">${chapter.title || 'Untitled'}</h1>
+        <div class="chapter">
+          <h1 class="chapter-title" id="${chapterId}">${chapter.title || 'Untitled'}</h1>
           <div class="chapter-content">
             ${bodyHtml}
           </div>
@@ -131,7 +137,6 @@ async function exportToPdf() {
     
     tocHtml += '</ul></div>'
 
-    // 3. Construct the Full HTML Document with Advanced Paged.js Styles
     const fullHtml = `
       <!DOCTYPE html>
       <html lang="en">
@@ -140,9 +145,48 @@ async function exportToPdf() {
         <title>${previewData.title || 'Book'} - Print Ready</title>
         <script src="https://unpkg.com/pagedjs/dist/paged.polyfill.js"><\/script>
         <script>
-          // Automatically trigger the print dialog once Paged.js finishes rendering
+          // Bulletproof JS Hook to bypass Chrome's broken CSS counters
           class PrintHandler extends Paged.Handler {
             afterRendered(pages) {
+              let isMainMatter = false;
+              let pageNum = 1;
+              let chapterPages = {};
+
+              // 1. Calculate Page Numbers & Find Chapters
+              pages.forEach(page => {
+                // Determine if this page is part of the main story
+                if (page.element.querySelector('.main-matter')) {
+                  isMainMatter = true;
+                }
+
+                if (isMainMatter) {
+                  // Inject page number into the bottom center margin box
+                  const bottomCenter = page.element.querySelector('.pagedjs_margin-bottom-center .pagedjs_margin-content');
+                  if (bottomCenter) {
+                    bottomCenter.innerText = pageNum;
+                  }
+
+                  // Record the start page of each chapter
+                  const chapterTitles = page.element.querySelectorAll('h1.chapter-title');
+                  chapterTitles.forEach(title => {
+                    if (title.id && !chapterPages[title.id]) {
+                      chapterPages[title.id] = pageNum;
+                    }
+                  });
+                  pageNum++;
+                }
+              });
+
+              // 2. Inject calculated numbers into the rendered Table of Contents
+              const renderedTocNums = document.querySelectorAll('.pagedjs_pages .toc-page-num');
+              renderedTocNums.forEach(span => {
+                const targetId = span.getAttribute('data-target');
+                if (chapterPages[targetId]) {
+                  span.innerText = chapterPages[targetId];
+                }
+              });
+
+              // Trigger print dialog
               setTimeout(() => { window.print(); }, 500);
             }
           }
@@ -150,18 +194,13 @@ async function exportToPdf() {
         <\/script>
         <style>
           /* --------------------------------------------------------
-             PAGE SETUP & NAMED PAGES
+             PAGE SETUP
              -------------------------------------------------------- */
-          /* Base Page (Used for Frontmatter: Title, TOC). NO PAGE NUMBERS */
           @page {
             size: 14cm 20cm;
             margin: 1.5cm 1.5cm 2cm 1.5cm;
-          }
-          
-          /* Chapter Named Page. INCLUDES ARABIC PAGE NUMBERS */
-          @page chapter {
             @bottom-center {
-              content: counter(page);
+              content: ""; /* Strictly left empty for JS injection */
               font-family: "Georgia", serif;
               font-size: 10pt;
             }
@@ -183,7 +222,6 @@ async function exportToPdf() {
              FRONTMATTER (TITLE & TOC)
              -------------------------------------------------------- */
           .title-page {
-            /* Forces the next element (TOC) to start on a RIGHT page, leaving the back of the title page blank */
             break-after: right; 
             text-align: center;
           }
@@ -195,10 +233,6 @@ async function exportToPdf() {
             padding-top: 40%;
           }
 
-          .toc-page {
-            /* Forces the element after TOC (Chapter 1) to start on a RIGHT page */
-            break-after: right; 
-          }
           .toc-page h2 {
             text-align: center;
             font-size: 18pt;
@@ -214,32 +248,45 @@ async function exportToPdf() {
             margin: 0;
           }
           .toc-list li {
-            margin-bottom: 1.2em; /* Give breathing room between TOC items */
+            margin-bottom: 1.2em; 
             line-height: 1.5;
           }
-          /* Magic TOC generation using target-counter and leader dots */
+          
+          /* Flexbox TOC Layout */
           .toc-list a {
+            display: flex;
+            align-items: baseline;
             text-decoration: none;
             color: #000;
-            /* DO NOT use display: block here, it breaks the leader() dots */
+            width: 100%;
           }
-          .toc-list a::after {
-            content: leader('.') target-counter(attr(href), page);
+          .toc-text {
+            white-space: nowrap;
+          }
+          .toc-dots {
+            flex-grow: 1;
+            border-bottom: 2px dotted #000;
+            margin: 0 8px;
+            position: relative;
+            top: -4px; 
+          }
+          .toc-page-num {
+            white-space: nowrap;
           }
 
           /* --------------------------------------------------------
              CHAPTERS (MAIN CONTENT)
              -------------------------------------------------------- */
           .main-matter {
-            /* Reset the page number counter to 1 for the entire main reading section */
-            counter-reset: page 1; 
+            break-before: right; 
           }
 
           .chapter {
-            /* Apply the named page with page numbers */
-            page: chapter; 
-            /* Ensure EVERY chapter starts on a right-facing (odd) page */
             break-before: right; 
+          }
+          
+          .chapter:first-of-type {
+            break-before: avoid; 
           }
 
           .chapter-title {
@@ -254,13 +301,10 @@ async function exportToPdf() {
           
           .chapter-content p {
             margin: 0;
-            margin-bottom: 1.2em; /* Wide gap between paragraphs */
-            text-indent: 0 !important; /* Strictly flush left, no indent */
+            margin-bottom: 1.2em; 
+            text-indent: 0 !important; 
             widows: 2;
             orphans: 2;
-          }
-          .chapter-content p:first-of-type {
-            text-indent: 0; 
           }
         </style>
       </head>
@@ -278,7 +322,6 @@ async function exportToPdf() {
       </html>
     `
 
-    // 4. Open in new tab and write the HTML
     const printWindow = window.open('', '_blank')
     if (printWindow) {
       printWindow.document.open()
