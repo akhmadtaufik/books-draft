@@ -75,3 +75,18 @@ CREATE TABLE IF NOT EXISTS chapter_versions (
 
 CREATE INDEX IF NOT EXISTS idx_chapter_versions_chapter_id ON chapter_versions(chapter_id);
 CREATE INDEX IF NOT EXISTS idx_chapter_versions_created_at ON chapter_versions(chapter_id, created_at DESC);
+
+-- -----------------------------------------------------------
+-- 6. book_notes (Plot Management – Character Sheets & Wiki)
+-- -----------------------------------------------------------
+CREATE TABLE IF NOT EXISTS book_notes (
+    id         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    book_id    UUID        NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+    title      VARCHAR(255) NOT NULL,
+    type       VARCHAR(50) NOT NULL CHECK (type IN ('character', 'worldbuilding')),
+    content    JSONB       NOT NULL DEFAULT '{}'::jsonb,
+    updated_at TIMESTAMP   NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_book_notes_book_id ON book_notes(book_id);
+CREATE INDEX IF NOT EXISTS idx_book_notes_type ON book_notes(book_id, type);
