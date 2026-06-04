@@ -24,6 +24,7 @@
           class="chapter-item"
           :class="{ active: chapter.id === activeChapterId }"
           @click="$emit('select', chapter.id)"
+          :title="chapter.title || 'Untitled'"
         >
           <div class="drag-handle" title="Drag to reorder" @click.stop>
             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" x2="8" y1="6" y2="6"/><line x1="16" x2="16" y1="6" y2="6"/><line x1="8" x2="8" y1="12" y2="12"/><line x1="16" x2="16" y1="12" y2="12"/><line x1="8" x2="8" y1="18" y2="18"/><line x1="16" x2="16" y1="18" y2="18"/></svg>
@@ -155,6 +156,9 @@ defineExpose({
 .sidebar {
   display: flex;
   flex-direction: column;
+  width: 260px;
+  min-width: 260px;
+  max-width: 260px;
   background-color: #121214;
   border-right: 1px solid #27272a;
   color: #e4e4e7;
@@ -244,9 +248,13 @@ defineExpose({
 
 .chapter-title {
   flex: 1;
-  white-space: nowrap;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
   overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
+  word-break: break-word;
+  line-height: 1.4;
   font-size: 0.9375rem;
 }
 
