@@ -389,7 +389,7 @@ onBeforeUnmount(() => {
   width: 100%;
   height: 100%;
   box-sizing: border-box;
-  padding: 3rem 6vw;
+  padding: 1.5rem 6vw 0px 6vw;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -425,10 +425,10 @@ onBeforeUnmount(() => {
 
 .chapter-heading {
   font-family: 'Inter', sans-serif;
-  font-size: 2.2rem;
+  font-size: 1.15rem;
   text-align: center;
-  margin-top: 2rem;
-  margin-bottom: 2.5rem;
+  margin-top: 1rem;
+  margin-bottom: 0.8rem;
   color: #18181b;
   break-after: avoid; 
   break-before: page; 
@@ -441,7 +441,7 @@ onBeforeUnmount(() => {
 
 .chapter-divider {
   text-align: center;
-  margin: 3rem 0;
+  margin: 1.5rem 0;
   color: #a1a1aa;
   letter-spacing: 0.5em;
   break-before: avoid; 
