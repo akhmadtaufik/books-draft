@@ -15,6 +15,12 @@
           <button @click="isStoryBibleOpen = !isStoryBibleOpen" class="btn-story-bible" :class="{ active: isStoryBibleOpen }">
             📖 Story Bible
           </button>
+          <button @click="exportToEpub" class="btn-primary" :disabled="isExporting">
+            {{ isExporting ? 'Exporting...' : 'Export EPUB' }}
+          </button>
+          <button @click="exportToPdf" class="btn-primary" :disabled="isExportingPdf">
+            {{ isExportingPdf ? 'Exporting...' : 'Export PDF' }}
+          </button>
           <button @click="isPreviewMode = true" class="btn-primary">
             Preview Book
           </button>
@@ -67,6 +73,8 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { get, post } from './composables/useApi.js'
+import { generateHTML } from '@tiptap/html'
+import StarterKit from '@tiptap/starter-kit'
 import ChapterSidebar from './components/ChapterSidebar.vue'
 import TipTapEditor from './components/TipTapEditor.vue'
 import BookPreview from './components/BookPreview.vue'
@@ -80,6 +88,276 @@ const sidebarRef = ref(null)
 
 const newBookTitle = ref('')
 const isLoading = ref(true)
+const isExporting = ref(false)
+const isExportingPdf = ref(false)
+
+async function exportToPdf() {
+  if (!currentBookId.value) return
+  isExportingPdf.value = true
+  
+  try {
+    // 1. Fetch book data
+    const previewData = await get(`/api/books/${currentBookId.value}/preview`)
+    
+    let chaptersHtml = ''
+    let tocHtml = '<div class="toc-page"><h2>Daftar Isi</h2><ul class="toc-list">'
+    
+    // 2. Build the Chapters and TOC HTML
+    previewData.chapters.forEach((chapter, index) => {
+      let bodyHtml = ''
+      if (chapter.content && Object.keys(chapter.content).length > 0) {
+        try {
+          bodyHtml = generateHTML(chapter.content, [StarterKit])
+        } catch (e) {
+          console.error('Error generating HTML for chapter:', e)
+        }
+      }
+      
+      const chapterId = `chapter-${index + 1}`
+      
+      // Add to TOC (Paged.js will fill in the page numbers automatically via CSS)
+      tocHtml += `<li><a href="#${chapterId}"><span class="toc-text">${chapter.title || 'Untitled'}</span></a></li>`
+      
+      // Add to Content
+      chaptersHtml += `
+        <div class="chapter" id="${chapterId}">
+          <h1 class="chapter-title">${chapter.title || 'Untitled'}</h1>
+          <div class="chapter-content">
+            ${bodyHtml}
+          </div>
+        </div>
+      `
+    })
+    
+    tocHtml += '</ul></div>'
+
+    // 3. Construct the Full HTML Document with Advanced Paged.js Styles
+    const fullHtml = `
+      <!DOCTYPE html>
+      <html lang="en">
+      <head>
+        <meta charset="UTF-8">
+        <title>${previewData.title || 'Book'} - Print Ready</title>
+        <script src="https://unpkg.com/pagedjs/dist/paged.polyfill.js"><\/script>
+        <script>
+          // Automatically trigger the print dialog once Paged.js finishes rendering
+          class PrintHandler extends Paged.Handler {
+            afterRendered(pages) {
+              setTimeout(() => { window.print(); }, 500);
+            }
+          }
+          Paged.registerHandlers(PrintHandler);
+        <\/script>
+        <style>
+          /* --------------------------------------------------------
+             PAGE SETUP & NAMED PAGES
+             -------------------------------------------------------- */
+          /* Base Page (Used for Frontmatter: Title, TOC). NO PAGE NUMBERS */
+          @page {
+            size: 14cm 20cm;
+            margin: 1.5cm 1.5cm 2cm 1.5cm;
+          }
+          
+          /* Chapter Named Page. INCLUDES ARABIC PAGE NUMBERS */
+          @page chapter {
+            @bottom-center {
+              content: counter(page);
+              font-family: "Georgia", serif;
+              font-size: 10pt;
+            }
+          }
+
+          /* --------------------------------------------------------
+             GLOBAL TYPOGRAPHY
+             -------------------------------------------------------- */
+          body {
+            font-family: "Georgia", "Times New Roman", serif;
+            font-size: 12pt;
+            line-height: 1.6;
+            text-align: justify;
+            color: #000;
+            background: #fff;
+          }
+
+          /* --------------------------------------------------------
+             FRONTMATTER (TITLE & TOC)
+             -------------------------------------------------------- */
+          .title-page {
+            /* Forces the next element (TOC) to start on a RIGHT page, leaving the back of the title page blank */
+            break-after: right; 
+            text-align: center;
+          }
+          .title-page h1 {
+            font-size: 24pt;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            font-weight: normal;
+            padding-top: 40%;
+          }
+
+          .toc-page {
+            /* Forces the element after TOC (Chapter 1) to start on a RIGHT page */
+            break-after: right; 
+          }
+          .toc-page h2 {
+            text-align: center;
+            font-size: 18pt;
+            margin-top: 3cm;
+            margin-bottom: 2cm;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            font-weight: normal;
+          }
+          .toc-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+          }
+          .toc-list li {
+            margin-bottom: 1.2em; /* Give breathing room between TOC items */
+            line-height: 1.5;
+          }
+          /* Magic TOC generation using target-counter and leader dots */
+          .toc-list a {
+            text-decoration: none;
+            color: #000;
+            /* DO NOT use display: block here, it breaks the leader() dots */
+          }
+          .toc-list a::after {
+            content: leader('.') target-counter(attr(href), page);
+          }
+
+          /* --------------------------------------------------------
+             CHAPTERS (MAIN CONTENT)
+             -------------------------------------------------------- */
+          .main-matter {
+            /* Reset the page number counter to 1 for the entire main reading section */
+            counter-reset: page 1; 
+          }
+
+          .chapter {
+            /* Apply the named page with page numbers */
+            page: chapter; 
+            /* Ensure EVERY chapter starts on a right-facing (odd) page */
+            break-before: right; 
+          }
+
+          .chapter-title {
+            text-align: center;
+            font-size: 18pt;
+            font-weight: normal;
+            margin-top: 3cm;
+            margin-bottom: 2cm;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+          }
+          
+          .chapter-content p {
+            margin: 0;
+            margin-bottom: 1.2em; /* Wide gap between paragraphs */
+            text-indent: 0 !important; /* Strictly flush left, no indent */
+            widows: 2;
+            orphans: 2;
+          }
+          .chapter-content p:first-of-type {
+            text-indent: 0; 
+          }
+        </style>
+      </head>
+      <body>
+        <div class="title-page">
+          <div style="margin-top: 50%;">
+            <h1>${previewData.title || 'Untitled Book'}</h1>
+          </div>
+        </div>
+        ${tocHtml}
+        <div class="main-matter">
+          ${chaptersHtml}
+        </div>
+      </body>
+      </html>
+    `
+
+    // 4. Open in new tab and write the HTML
+    const printWindow = window.open('', '_blank')
+    if (printWindow) {
+      printWindow.document.open()
+      printWindow.document.write(fullHtml)
+      printWindow.document.close()
+    } else {
+      alert("Please allow popups to export to PDF.")
+    }
+
+  } catch (err) {
+    console.error('Failed to generate PDF:', err)
+  } finally {
+    isExportingPdf.value = false
+  }
+}
+
+async function exportToEpub() {
+  if (!currentBookId.value || isExporting.value) return
+  
+  isExporting.value = true
+  try {
+    const preview = await get(`/api/books/${currentBookId.value}/preview`)
+    
+    const mappedChapters = preview.chapters.map(chapter => {
+      let html = ''
+      if (chapter.content && Object.keys(chapter.content).length > 0) {
+        try {
+          html = generateHTML(chapter.content, [StarterKit])
+        } catch (e) {
+          console.error('Error generating HTML for chapter:', e)
+        }
+      }
+      return {
+        title: chapter.title,
+        html: html
+      }
+    })
+    
+    const payload = {
+      title: preview.title || 'Exported Book',
+      chapters: mappedChapters
+    }
+    
+    const response = await fetch(`/api/books/${currentBookId.value}/export/epub`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    })
+    
+    if (!response.ok) {
+      throw new Error(`Export failed with status: ${response.status}`)
+    }
+    
+    const blob = await response.blob()
+    const url = window.URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    
+    let filename = 'book_export.epub'
+    const contentDisposition = response.headers.get('Content-Disposition')
+    if (contentDisposition && contentDisposition.includes('filename="')) {
+      filename = contentDisposition.split('filename="')[1].split('"')[0]
+    }
+    
+    a.download = filename
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    window.URL.revokeObjectURL(url)
+    
+  } catch (err) {
+    console.error('Failed to export EPUB:', err)
+    alert('Failed to export EPUB. Please try again.')
+  } finally {
+    isExporting.value = false
+  }
+}
 
 onMounted(async () => {
   try {
