@@ -59,6 +59,7 @@ func main() {
 	mux.HandleFunc("GET /api/books", bookHandler.ListBooks)
 	mux.HandleFunc("POST /api/books", bookHandler.CreateBook)
 	mux.HandleFunc("GET /api/books/{id}/preview", bookHandler.GetBookPreview)
+	mux.HandleFunc("POST /api/books/{id}/export/epub", bookHandler.ExportEPUB)
 
 	// Chapter routes (book-scoped)
 	mux.HandleFunc("GET /api/books/{bookId}/chapters", chapterHandler.ListChapters)
