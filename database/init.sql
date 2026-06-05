@@ -23,9 +23,17 @@ CREATE TABLE IF NOT EXISTS books (
     id              UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id         UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     title           VARCHAR(500) NOT NULL,
+    author          VARCHAR(255) DEFAULT '',
+    synopsis        TEXT        DEFAULT '',
+    genre           VARCHAR(100) DEFAULT '',
+    language        VARCHAR(50)  DEFAULT 'Indonesian',
+    isbn            VARCHAR(50)  DEFAULT '',
+    publisher       VARCHAR(255) DEFAULT '',
+    status          VARCHAR(50)  DEFAULT 'Draft',
     cover_image_url VARCHAR(2048),
     metadata        JSONB       NOT NULL DEFAULT '{}'::jsonb,
-    created_at      TIMESTAMP   NOT NULL DEFAULT NOW()
+    created_at      TIMESTAMP   NOT NULL DEFAULT NOW(),
+    updated_at      TIMESTAMP   NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_books_user_id ON books(user_id);
