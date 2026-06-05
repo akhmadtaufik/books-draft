@@ -58,6 +58,8 @@ func main() {
 	// Book routes
 	mux.HandleFunc("GET /api/books", bookHandler.ListBooks)
 	mux.HandleFunc("POST /api/books", bookHandler.CreateBook)
+	mux.HandleFunc("PUT /api/books/{id}", bookHandler.UpdateBook)
+	mux.HandleFunc("DELETE /api/books/{id}", bookHandler.DeleteBook)
 	mux.HandleFunc("GET /api/books/{id}/preview", bookHandler.GetBookPreview)
 	mux.HandleFunc("POST /api/books/{id}/export/epub", bookHandler.ExportEPUB)
 
