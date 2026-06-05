@@ -63,6 +63,7 @@ import StarterKit from '@tiptap/starter-kit'
 import CharacterCount from '@tiptap/extension-character-count'
 
 import { get, put, post } from '../composables/useApi.js'
+import { chapterApi } from '../api/chapterApi.js'
 import { useAutosave } from '../composables/useAutosave.js'
 import { useSpellCheck } from '../composables/useSpellCheck.js'
 import { calculateReadingTime } from '../composables/useReadingTime.js'
@@ -145,7 +146,7 @@ function onTitleUpdate() {
   emit('title-updated', { id: props.chapterId, title: chapterTitle.value })
   
   // Trigger title save immediately or debounce
-  put(`/api/chapters/${props.chapterId}`, { title: chapterTitle.value })
+  chapterApi.update(props.chapterId, { title: chapterTitle.value })
     .then(() => {
       lastSavedAt.value = new Date()
       hasUnsavedChanges.value = false
@@ -194,7 +195,7 @@ async function loadChapter() {
   error.value = null
   
   try {
-    const chapter = await get(`/api/chapters/${props.chapterId}`)
+    const chapter = await chapterApi.getById(props.chapterId)
     chapterTitle.value = chapter.title || ''
     
     nextTick(() => {
@@ -244,7 +245,7 @@ async function saveSessionSnapshot(chapterId) {
   }
 
   try {
-    await post(`/api/chapters/${chapterId}/versions`, { snapshot_type: 'session_end' })
+    await chapterApi.saveSnapshot(chapterId, 'session_end')
     isDirty.value = false // Reset after successful save
   } catch (err) {
     console.warn('[VersionHistory] Session snapshot failed:', err)
@@ -255,7 +256,7 @@ async function saveManualMilestone() {
   if (!props.chapterId || isSavingMilestone.value) return
   isSavingMilestone.value = true
   try {
-    await post(`/api/chapters/${props.chapterId}/versions`, { snapshot_type: 'manual_milestone' })
+    await chapterApi.saveSnapshot(props.chapterId, 'manual_milestone')
     isDirty.value = false // Reset since current state is safely backed up
   } catch (err) {
     console.error('[VersionHistory] Milestone save failed:', err)

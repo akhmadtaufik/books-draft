@@ -1,6 +1,6 @@
 <script setup>
 import { ref, onMounted } from 'vue'
-import { get, post, put, del } from '../composables/useApi.js'
+import { bookApi } from '../api/bookApi.js'
 import BookMetadataModal from './BookMetadataModal.vue'
 
 const emit = defineEmits(['open-book'])
@@ -10,7 +10,7 @@ const isLoading = ref(true)
 
 onMounted(async () => {
   try {
-    const data = await get('/api/books')
+    const data = await bookApi.getAll()
     if (data) {
       books.value = data
     }
@@ -82,13 +82,13 @@ async function submitBook(payloadFromModal) {
     delete payload.id // Don't send id in body typically
     
     if (isEditing.value) {
-      const updatedBook = await put(`/api/books/${payloadFromModal.id}`, payload)
+      const updatedBook = await bookApi.update(payloadFromModal.id, payload)
       const index = books.value.findIndex(b => b.id === updatedBook.id)
       if (index !== -1) {
         books.value[index] = updatedBook
       }
     } else {
-      const newBook = await post('/api/books', payload)
+      const newBook = await bookApi.create(payload)
       books.value.unshift(newBook)
     }
     closeModal()
@@ -103,7 +103,7 @@ async function submitBook(payloadFromModal) {
 async function confirmDelete(bookId) {
   if (confirm('Are you sure you want to delete this book? This action cannot be undone.')) {
     try {
-      await del(`/api/books/${bookId}`)
+      await bookApi.delete(bookId)
       books.value = books.value.filter(b => b.id !== bookId)
     } catch (err) {
       console.error('Failed to delete book:', err)

@@ -1,4 +1,4 @@
-import { get } from '../composables/useApi.js'
+import { bookApi } from '../api/bookApi.js'
 import { generateHTML } from '@tiptap/html'
 import StarterKit from '@tiptap/starter-kit'
 
@@ -6,7 +6,7 @@ export async function generatePdfExport(bookId) {
   if (!bookId) return
   
   try {
-    const previewData = await get(`/api/books/${bookId}/preview`)
+    const previewData = await bookApi.getPreview(bookId)
     
     let chaptersHtml = ''
     let tocHtml = '<div class="toc-page"><h2>Daftar Isi</h2><ul class="toc-list">'
@@ -219,7 +219,7 @@ export async function generateEpubExport(bookId) {
   if (!bookId) return
   
   try {
-    const preview = await get(`/api/books/${bookId}/preview`)
+    const preview = await bookApi.getPreview(bookId)
     
     const mappedChapters = preview.chapters.map(chapter => {
       let html = ''
