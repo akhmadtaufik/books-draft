@@ -4,7 +4,8 @@ import vue from '@vitejs/plugin-vue'
 export default defineConfig({
   plugins: [vue()],
   server: {
-    host: '0.0.0.0',
+    // Ensure the server binds to all network interfaces for Docker compatibility
+    host: true,
     port: 5173,
     proxy: {
       '/api': {
@@ -12,5 +13,15 @@ export default defineConfig({
         changeOrigin: true,
       },
     },
+    watch: {
+      // Ignored paths to prevent infinite HMR reload loops caused by backend writes
+      ignored: [
+        '**/backend/**', 
+        '**/database/**', 
+        '**/.git/**', 
+        '**/docker-compose.yml',
+        '**/.env*'
+      ]
+    }
   },
 })
