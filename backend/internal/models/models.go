@@ -20,9 +20,17 @@ type Book struct {
 	ID            uuid.UUID        `json:"id"`
 	UserID        uuid.UUID        `json:"userId"`
 	Title         string           `json:"title"`
+	Author        string           `json:"author"`
+	Synopsis      string           `json:"synopsis"`
+	Genre         string           `json:"genre"`
+	Language      string           `json:"language"`
+	ISBN          string           `json:"isbn"`
+	Publisher     string           `json:"publisher"`
+	Status        string           `json:"status"`
 	CoverImageURL *string          `json:"coverImageUrl"`
 	Metadata      json.RawMessage  `json:"metadata"`
-	CreatedAt     time.Time        `json:"createdAt"`
+	CreatedAt     time.Time        `json:"created_at"`
+	UpdatedAt     time.Time        `json:"updated_at"`
 }
 
 // Chapter represents a full row in the chapters table (includes content).
