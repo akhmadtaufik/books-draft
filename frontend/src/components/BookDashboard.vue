@@ -2,18 +2,23 @@
 import { ref, onMounted } from 'vue'
 import { get, post, put, del } from '../composables/useApi.js'
 
-const props = defineProps({
-  books: {
-    type: Array,
-    required: true
-  },
-  isLoading: {
-    type: Boolean,
-    default: false
+const emit = defineEmits(['open-book'])
+
+const books = ref([])
+const isLoading = ref(true)
+
+onMounted(async () => {
+  try {
+    const data = await get('/api/books')
+    if (data) {
+      books.value = data
+    }
+  } catch (err) {
+    console.error('Failed to load books:', err)
+  } finally {
+    isLoading.value = false
   }
 })
-
-const emit = defineEmits(['open-book', 'book-created', 'book-updated', 'book-deleted'])
 
 const showModal = ref(false)
 const isEditing = ref(false)
@@ -77,10 +82,13 @@ async function submitBook() {
     
     if (isEditing.value) {
       const updatedBook = await put(`/api/books/${bookForm.value.id}`, payload)
-      emit('book-updated', updatedBook)
+      const index = books.value.findIndex(b => b.id === updatedBook.id)
+      if (index !== -1) {
+        books.value[index] = updatedBook
+      }
     } else {
       const newBook = await post('/api/books', payload)
-      emit('book-created', newBook)
+      books.value.unshift(newBook)
     }
     closeModal()
   } catch (err) {
@@ -95,7 +103,7 @@ async function confirmDelete(bookId) {
   if (confirm('Are you sure you want to delete this book? This action cannot be undone.')) {
     try {
       await del(`/api/books/${bookId}`)
-      emit('book-deleted', bookId)
+      books.value = books.value.filter(b => b.id !== bookId)
     } catch (err) {
       console.error('Failed to delete book:', err)
       alert('Failed to delete book. Please try again.')
