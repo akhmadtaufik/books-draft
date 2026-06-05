@@ -14,6 +14,7 @@ import (
 	"novel-drafting-api/internal/database"
 	"novel-drafting-api/internal/handlers"
 	"novel-drafting-api/internal/middleware"
+	"novel-drafting-api/internal/repository"
 )
 
 func main() {
@@ -35,12 +36,19 @@ func main() {
 		log.Fatalf("seed default user failed: %v", err)
 	}
 
+	// Initialize repositories.
+	bookRepo := repository.NewBookRepository(pool)
+	chapterRepo := repository.NewChapterRepository(pool)
+	noteRepo := repository.NewNoteRepository(pool)
+	versionRepo := repository.NewVersionRepository(pool)
+	dictionaryRepo := repository.NewDictionaryRepository(pool)
+
 	// Create handlers.
-	bookHandler := handlers.NewBookHandler(pool, defaultUserID.String())
-	chapterHandler := handlers.NewChapterHandler(pool)
-	dictionaryHandler := handlers.NewDictionaryHandler(pool, defaultUserID.String())
-	versionHandler := handlers.NewVersionHandler(pool)
-	notesHandler := handlers.NewNotesHandler(pool)
+	bookHandler := handlers.NewBookHandler(bookRepo, defaultUserID.String())
+	chapterHandler := handlers.NewChapterHandler(chapterRepo)
+	dictionaryHandler := handlers.NewDictionaryHandler(dictionaryRepo, defaultUserID.String())
+	versionHandler := handlers.NewVersionHandler(versionRepo)
+	notesHandler := handlers.NewNotesHandler(noteRepo)
 
 	// Register routes using Go 1.22+ method patterns.
 	mux := http.NewServeMux()

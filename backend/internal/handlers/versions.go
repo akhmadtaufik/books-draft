@@ -4,19 +4,17 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/jackc/pgx/v5/pgxpool"
-
-	"novel-drafting-api/internal/models"
+	"novel-drafting-api/internal/repository"
 )
 
 // VersionHandler holds dependencies for version-related HTTP handlers.
 type VersionHandler struct {
-	pool *pgxpool.Pool
+	repo repository.VersionRepository
 }
 
 // NewVersionHandler creates a new VersionHandler.
-func NewVersionHandler(pool *pgxpool.Pool) *VersionHandler {
-	return &VersionHandler{pool: pool}
+func NewVersionHandler(repo repository.VersionRepository) *VersionHandler {
+	return &VersionHandler{repo: repo}
 }
 
 // CreateVersion snapshots the current chapter content into chapter_versions.
@@ -40,27 +38,7 @@ func (h *VersionHandler) CreateVersion(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx := r.Context()
-
-	// Fetch the current chapter content.
-	var currentContent json.RawMessage
-	err := h.pool.QueryRow(ctx,
-		"SELECT content FROM chapters WHERE id = $1",
-		chapterID,
-	).Scan(&currentContent)
-	if err != nil {
-		writeError(w, http.StatusNotFound, "chapter not found")
-		return
-	}
-
-	// Insert a new version.
-	var version models.ChapterVersion
-	err = h.pool.QueryRow(ctx,
-		`INSERT INTO chapter_versions (chapter_id, content, snapshot_type)
-		 VALUES ($1, $2, $3)
-		 RETURNING id, chapter_id, snapshot_type, created_at`,
-		chapterID, currentContent, req.SnapshotType,
-	).Scan(&version.ID, &version.ChapterID, &version.SnapshotType, &version.CreatedAt)
+	version, err := h.repo.Create(r.Context(), chapterID, req.SnapshotType)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to create version")
 		return
@@ -79,27 +57,10 @@ func (h *VersionHandler) ListVersions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rows, err := h.pool.Query(r.Context(),
-		`SELECT id, chapter_id, snapshot_type, created_at
-		 FROM chapter_versions
-		 WHERE chapter_id = $1
-		 ORDER BY created_at DESC`,
-		chapterID,
-	)
+	versions, err := h.repo.List(r.Context(), chapterID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to query versions")
 		return
-	}
-	defer rows.Close()
-
-	versions := make([]models.ChapterVersion, 0)
-	for rows.Next() {
-		var v models.ChapterVersion
-		if err := rows.Scan(&v.ID, &v.ChapterID, &v.SnapshotType, &v.CreatedAt); err != nil {
-			writeError(w, http.StatusInternalServerError, "failed to scan version")
-			return
-		}
-		versions = append(versions, v)
 	}
 
 	json.NewEncoder(w).Encode(versions)
@@ -114,12 +75,7 @@ func (h *VersionHandler) GetVersion(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var version models.ChapterVersionFull
-	err := h.pool.QueryRow(r.Context(),
-		`SELECT id, chapter_id, content, snapshot_type, created_at
-		 FROM chapter_versions WHERE id = $1`,
-		versionID,
-	).Scan(&version.ID, &version.ChapterID, &version.Content, &version.SnapshotType, &version.CreatedAt)
+	version, err := h.repo.GetByID(r.Context(), versionID)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "version not found")
 		return
@@ -137,15 +93,12 @@ func (h *VersionHandler) DeleteVersion(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tag, err := h.pool.Exec(r.Context(),
-		"DELETE FROM chapter_versions WHERE id = $1",
-		versionID,
-	)
+	rowsAffected, err := h.repo.Delete(r.Context(), versionID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to delete version")
 		return
 	}
-	if tag.RowsAffected() == 0 {
+	if rowsAffected == 0 {
 		writeError(w, http.StatusNotFound, "version not found")
 		return
 	}

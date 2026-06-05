@@ -4,19 +4,18 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/jackc/pgx/v5/pgxpool"
-
 	"novel-drafting-api/internal/models"
+	"novel-drafting-api/internal/repository"
 )
 
 // NotesHandler holds dependencies for book-note HTTP handlers.
 type NotesHandler struct {
-	pool *pgxpool.Pool
+	repo repository.NoteRepository
 }
 
 // NewNotesHandler creates a new NotesHandler.
-func NewNotesHandler(pool *pgxpool.Pool) *NotesHandler {
-	return &NotesHandler{pool: pool}
+func NewNotesHandler(repo repository.NoteRepository) *NotesHandler {
+	return &NotesHandler{repo: repo}
 }
 
 // ListNotes returns all notes belonging to a specific book, ordered by updated_at DESC.
@@ -27,31 +26,9 @@ func (h *NotesHandler) ListNotes(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rows, err := h.pool.Query(r.Context(),
-		`SELECT id, book_id, title, type, content, updated_at
-		 FROM book_notes
-		 WHERE book_id = $1
-		 ORDER BY updated_at DESC`,
-		bookID,
-	)
+	notes, err := h.repo.List(r.Context(), bookID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to query notes")
-		return
-	}
-	defer rows.Close()
-
-	notes := make([]models.BookNote, 0)
-	for rows.Next() {
-		var n models.BookNote
-		if err := rows.Scan(&n.ID, &n.BookID, &n.Title, &n.Type, &n.Content, &n.UpdatedAt); err != nil {
-			writeError(w, http.StatusInternalServerError, "failed to scan note")
-			return
-		}
-		notes = append(notes, n)
-	}
-
-	if err := rows.Err(); err != nil {
-		writeError(w, http.StatusInternalServerError, "error iterating notes")
 		return
 	}
 
@@ -86,14 +63,7 @@ func (h *NotesHandler) CreateNote(w http.ResponseWriter, r *http.Request) {
 		req.Content = json.RawMessage(`{}`)
 	}
 
-	var n models.BookNote
-	err := h.pool.QueryRow(r.Context(),
-		`INSERT INTO book_notes (book_id, title, type, content)
-		 VALUES ($1, $2, $3, $4)
-		 RETURNING id, book_id, title, type, content, updated_at`,
-		bookID, req.Title, req.Type, req.Content,
-	).Scan(&n.ID, &n.BookID, &n.Title, &n.Type, &n.Content, &n.UpdatedAt)
-
+	n, err := h.repo.Create(r.Context(), bookID, req.Title, req.Type, req.Content)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to create note")
 		return
@@ -117,17 +87,16 @@ func (h *NotesHandler) UpdateNote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var n models.BookNote
-	err := h.pool.QueryRow(r.Context(),
-		`UPDATE book_notes
-		 SET title = COALESCE(NULLIF($1, ''), title),
-		     content = COALESCE($2, content),
-		     updated_at = NOW()
-		 WHERE id = $3
-		 RETURNING id, book_id, title, type, content, updated_at`,
-		req.Title, req.Content, noteID,
-	).Scan(&n.ID, &n.BookID, &n.Title, &n.Type, &n.Content, &n.UpdatedAt)
+	var titlePtr *string
+	if req.Title != "" {
+		titlePtr = &req.Title
+	}
+	var contentPtr *json.RawMessage
+	if req.Content != nil {
+		contentPtr = &req.Content
+	}
 
+	n, err := h.repo.Update(r.Context(), noteID, titlePtr, contentPtr)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "note not found")
 		return
@@ -144,16 +113,13 @@ func (h *NotesHandler) DeleteNote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tag, err := h.pool.Exec(r.Context(),
-		`DELETE FROM book_notes WHERE id = $1`,
-		noteID,
-	)
+	rowsAffected, err := h.repo.Delete(r.Context(), noteID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to delete note")
 		return
 	}
 
-	if tag.RowsAffected() == 0 {
+	if rowsAffected == 0 {
 		writeError(w, http.StatusNotFound, "note not found")
 		return
 	}

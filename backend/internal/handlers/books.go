@@ -4,48 +4,26 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/jackc/pgx/v5/pgxpool"
-
 	"novel-drafting-api/internal/models"
+	"novel-drafting-api/internal/repository"
 )
 
 // BookHandler holds dependencies for book-related HTTP handlers.
 type BookHandler struct {
-	pool          *pgxpool.Pool
+	repo          repository.BookRepository
 	defaultUserID string
 }
 
 // NewBookHandler creates a new BookHandler.
-func NewBookHandler(pool *pgxpool.Pool, defaultUserID string) *BookHandler {
-	return &BookHandler{pool: pool, defaultUserID: defaultUserID}
+func NewBookHandler(repo repository.BookRepository, defaultUserID string) *BookHandler {
+	return &BookHandler{repo: repo, defaultUserID: defaultUserID}
 }
 
 // ListBooks returns all books belonging to the default user.
 func (h *BookHandler) ListBooks(w http.ResponseWriter, r *http.Request) {
-	rows, err := h.pool.Query(r.Context(),
-		`SELECT id, title, author, synopsis, genre, language, isbn, publisher, status, cover_image_url, metadata, created_at, updated_at
-		 FROM books WHERE user_id = $1
-		 ORDER BY updated_at DESC, created_at DESC`,
-		h.defaultUserID,
-	)
+	books, err := h.repo.GetAll(r.Context(), h.defaultUserID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to query books")
-		return
-	}
-	defer rows.Close()
-
-	books := make([]models.Book, 0)
-	for rows.Next() {
-		var b models.Book
-		if err := rows.Scan(&b.ID, &b.Title, &b.Author, &b.Synopsis, &b.Genre, &b.Language, &b.ISBN, &b.Publisher, &b.Status, &b.CoverImageURL, &b.Metadata, &b.CreatedAt, &b.UpdatedAt); err != nil {
-			writeError(w, http.StatusInternalServerError, "failed to scan book")
-			return
-		}
-		books = append(books, b)
-	}
-
-	if err := rows.Err(); err != nil {
-		writeError(w, http.StatusInternalServerError, "error iterating books")
 		return
 	}
 
@@ -79,14 +57,18 @@ func (h *BookHandler) CreateBook(w http.ResponseWriter, r *http.Request) {
 		req.Status = "Draft"
 	}
 
-	var b models.Book
-	err := h.pool.QueryRow(r.Context(),
-		`INSERT INTO books (user_id, title, author, synopsis, genre, language, isbn, publisher, status)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-		 RETURNING id, user_id, title, author, synopsis, genre, language, isbn, publisher, status, cover_image_url, metadata, created_at, updated_at`,
-		h.defaultUserID, req.Title, req.Author, req.Synopsis, req.Genre, req.Language, req.ISBN, req.Publisher, req.Status,
-	).Scan(&b.ID, &b.UserID, &b.Title, &b.Author, &b.Synopsis, &b.Genre, &b.Language, &b.ISBN, &b.Publisher, &b.Status, &b.CoverImageURL, &b.Metadata, &b.CreatedAt, &b.UpdatedAt)
+	bookToCreate := models.Book{
+		Title:     req.Title,
+		Author:    req.Author,
+		Synopsis:  req.Synopsis,
+		Genre:     req.Genre,
+		Language:  req.Language,
+		ISBN:      req.ISBN,
+		Publisher: req.Publisher,
+		Status:    req.Status,
+	}
 
+	b, err := h.repo.Create(r.Context(), h.defaultUserID, &bookToCreate)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to create book")
 		return
@@ -129,15 +111,18 @@ func (h *BookHandler) UpdateBook(w http.ResponseWriter, r *http.Request) {
 		req.Status = "Draft"
 	}
 
-	var b models.Book
-	err := h.pool.QueryRow(r.Context(),
-		`UPDATE books 
-		 SET title = $1, author = $2, synopsis = $3, genre = $4, language = $5, isbn = $6, publisher = $7, status = $8, updated_at = NOW()
-		 WHERE id = $9 AND user_id = $10
-		 RETURNING id, user_id, title, author, synopsis, genre, language, isbn, publisher, status, cover_image_url, metadata, created_at, updated_at`,
-		req.Title, req.Author, req.Synopsis, req.Genre, req.Language, req.ISBN, req.Publisher, req.Status, bookID, h.defaultUserID,
-	).Scan(&b.ID, &b.UserID, &b.Title, &b.Author, &b.Synopsis, &b.Genre, &b.Language, &b.ISBN, &b.Publisher, &b.Status, &b.CoverImageURL, &b.Metadata, &b.CreatedAt, &b.UpdatedAt)
+	bookToUpdate := models.Book{
+		Title:     req.Title,
+		Author:    req.Author,
+		Synopsis:  req.Synopsis,
+		Genre:     req.Genre,
+		Language:  req.Language,
+		ISBN:      req.ISBN,
+		Publisher: req.Publisher,
+		Status:    req.Status,
+	}
 
+	b, err := h.repo.Update(r.Context(), h.defaultUserID, bookID, &bookToUpdate)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to update book")
 		return
@@ -154,15 +139,12 @@ func (h *BookHandler) DeleteBook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	commandTag, err := h.pool.Exec(r.Context(),
-		"DELETE FROM books WHERE id = $1 AND user_id = $2",
-		bookID, h.defaultUserID,
-	)
+	rowsAffected, err := h.repo.Delete(r.Context(), h.defaultUserID, bookID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to delete book")
 		return
 	}
-	if commandTag.RowsAffected() == 0 {
+	if rowsAffected == 0 {
 		writeError(w, http.StatusNotFound, "book not found")
 		return
 	}
@@ -178,42 +160,12 @@ func (h *BookHandler) GetBookPreview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get book title.
-	var title string
-	err := h.pool.QueryRow(r.Context(),
-		"SELECT title FROM books WHERE id = $1 AND user_id = $2",
-		bookID, h.defaultUserID,
-	).Scan(&title)
+	preview, err := h.repo.GetPreview(r.Context(), h.defaultUserID, bookID)
 	if err != nil {
-		writeError(w, http.StatusNotFound, "book not found")
+		// Could differentiate between 404 and 500 based on error, but keeping it simple for now
+		writeError(w, http.StatusInternalServerError, "failed to get book preview")
 		return
 	}
 
-	// Get all chapters ordered by position.
-	rows, err := h.pool.Query(r.Context(),
-		`SELECT title, content FROM chapters
-		 WHERE book_id = $1
-		 ORDER BY position_index ASC`,
-		bookID,
-	)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to query chapters")
-		return
-	}
-	defer rows.Close()
-
-	chapters := make([]models.ChapterPreview, 0)
-	for rows.Next() {
-		var ch models.ChapterPreview
-		if err := rows.Scan(&ch.Title, &ch.Content); err != nil {
-			writeError(w, http.StatusInternalServerError, "failed to scan chapter")
-			return
-		}
-		chapters = append(chapters, ch)
-	}
-
-	json.NewEncoder(w).Encode(models.BookPreview{
-		Title:    title,
-		Chapters: chapters,
-	})
+	json.NewEncoder(w).Encode(preview)
 }
