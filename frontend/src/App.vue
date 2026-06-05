@@ -7,6 +7,7 @@
     <template v-else>
       <header class="app-header">
         <div class="header-left">
+          <button v-if="currentBookId" @click="currentBookId = null" class="btn-icon back-btn" title="Back to Library">⬅️</button>
           <h1>Novel Drafting App</h1>
           <span class="app-badge">v0.1 — MVP</span>
         </div>
@@ -28,13 +29,16 @@
       </header>
       
       <main class="app-main">
-        <div v-if="!currentBookId && !isLoading" class="empty-book-state">
-          <h2>Create Your First Book</h2>
-          <form @click.prevent="createInitialBook" class="create-book-form">
-            <input v-model="newBookTitle" placeholder="Enter book title..." required />
-            <button type="submit" class="btn-primary">Create Book</button>
-          </form>
-        </div>
+        <template v-if="!currentBookId">
+          <BookDashboard 
+            :books="booksList" 
+            :isLoading="isLoading"
+            @open-book="openBook"
+            @book-created="onBookCreated"
+            @book-updated="onBookUpdated"
+            @book-deleted="onBookDeleted"
+          />
+        </template>
         
         <template v-else-if="currentBookId">
           <ChapterSidebar 
@@ -79,6 +83,9 @@ import ChapterSidebar from './components/ChapterSidebar.vue'
 import TipTapEditor from './components/TipTapEditor.vue'
 import BookPreview from './components/BookPreview.vue'
 import StoryBible from './components/StoryBible.vue'
+import BookDashboard from './components/BookDashboard.vue'
+
+const booksList = ref([])
 
 const currentBookId = ref(null)
 const currentChapterId = ref(null)
@@ -406,13 +413,13 @@ onMounted(async () => {
   try {
     const books = await get('/api/books')
     if (books && books.length > 0) {
-      currentBookId.value = books[0].id
-      
-      // Load chapters for the first book
-      const chapters = await get(`/api/books/${currentBookId.value}/chapters`)
-      if (chapters && chapters.length > 0) {
-        currentChapterId.value = chapters[0].id
-      }
+      booksList.value = books
+      // Commented out to default to the dashboard view
+      // currentBookId.value = books[0].id
+      // const chapters = await get(`/api/books/${currentBookId.value}/chapters`)
+      // if (chapters && chapters.length > 0) {
+      //   currentChapterId.value = chapters[0].id
+      // }
     }
   } catch (err) {
     console.error('Failed to load books:', err)
@@ -421,12 +428,45 @@ onMounted(async () => {
   }
 })
 
+async function openBook(id) {
+  currentBookId.value = id
+  try {
+    const chapters = await get(`/api/books/${id}/chapters`)
+    if (chapters && chapters.length > 0) {
+      currentChapterId.value = chapters[0].id
+    } else {
+      currentChapterId.value = null
+    }
+  } catch (err) {
+    console.error('Failed to load chapters for book:', err)
+  }
+}
+
+function onBookCreated(newBook) {
+  booksList.value.unshift(newBook)
+}
+
+function onBookUpdated(updatedBook) {
+  const index = booksList.value.findIndex(b => b.id === updatedBook.id)
+  if (index !== -1) {
+    booksList.value[index] = updatedBook
+  }
+}
+
+function onBookDeleted(bookId) {
+  booksList.value = booksList.value.filter(b => b.id !== bookId)
+  if (currentBookId.value === bookId) {
+    currentBookId.value = null
+    currentChapterId.value = null
+  }
+}
+
 async function createInitialBook() {
   if (!newBookTitle.value) return
   isLoading.value = true
   try {
     const book = await post('/api/books', { title: newBookTitle.value })
-    currentBookId.value = book.id
+    booksList.value.unshift(book)
     newBookTitle.value = ''
   } catch (err) {
     console.error('Failed to create book:', err)
@@ -540,6 +580,21 @@ body {
   display: flex;
   align-items: center;
   gap: 1rem;
+}
+
+.back-btn {
+  background: transparent;
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  transition: transform 0.2s;
+}
+
+.back-btn:hover {
+  transform: translateX(-3px);
 }
 
 .header-right {
