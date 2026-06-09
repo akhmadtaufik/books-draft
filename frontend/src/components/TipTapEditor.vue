@@ -26,18 +26,14 @@
         <editor-content :editor="editor" class="tiptap-content" spellcheck="false" />
       </div>
 
-      <!-- Spell Check Tooltip -->
-      <div v-if="tooltip.show" class="spell-tooltip" :style="{ top: tooltip.y + 'px', left: tooltip.x + 'px' }">
-        <span class="misspelled-word">"{{ tooltip.word }}"</span>
-        <button @click="handleAddWord" class="btn-add-word">Add to Dictionary</button>
-      </div>
+
 
       <div v-if="commentTooltip.show" class="comment-tooltip" :style="{ top: commentTooltip.y + 'px', left: commentTooltip.x + 'px' }">
         <div class="comment-header">📝 Revision Note</div>
         <div class="comment-body">{{ commentTooltip.text }}</div>
       </div>
 
-      <div v-if="contextMenu.show" class="custom-context-menu" :style="{ top: contextMenu.y + 'px', left: contextMenu.x + 'px' }">
+      <div v-if="contextMenu.show" class="custom-context-menu" :style="{ top: contextMenu.y + 'px', left: contextMenu.x + 'px' }" @click.stop>
         <template v-if="contextMenu.mode === 'menu'">
           <div class="context-menu-section">
             <span class="context-menu-label">Highlight:</span>
@@ -70,6 +66,30 @@
               ref="commentInputRef"
             />
             <button class="btn-save-comment" @click="saveContextComment">Save</button>
+          </div>
+        </template>
+        <template v-else-if="contextMenu.mode === 'spelling'">
+          <div class="context-menu-section">
+            <span class="context-menu-label">Suggestions:</span>
+            <div v-if="contextMenu.suggestions.length === 0" class="context-menu-label" style="padding: 0.5rem; font-style: italic;">
+              Loading... or no suggestions
+            </div>
+            <template v-else>
+              <button 
+                v-for="sugg in contextMenu.suggestions" 
+                :key="sugg"
+                class="context-menu-btn"
+                @click="applySuggestion(sugg)"
+              >
+                ✨ {{ sugg }}
+              </button>
+            </template>
+            
+            <div class="context-menu-divider"></div>
+            
+            <button class="context-menu-btn text-blue" @click="handleAddWordContext">
+              📚 Add "{{ contextMenu.word }}" to Dictionary
+            </button>
           </div>
         </template>
       </div>
@@ -125,7 +145,6 @@ const error = ref(null)
 const chapterTitle = ref('')
 const isDirty = ref(false)
 
-const tooltip = ref({ show: false, x: 0, y: 0, word: '' })
 const commentTooltip = ref({ show: false, x: 0, y: 0, text: '' })
 
 // --- Custom Context Menu State ---
@@ -133,8 +152,11 @@ const contextMenu = ref({
   show: false,
   x: 0,
   y: 0,
-  mode: 'menu', // 'menu' | 'comment-input'
-  commentText: ''
+  mode: 'menu', // 'menu' | 'comment-input' | 'spelling'
+  commentText: '',
+  word: '',
+  pos: null,
+  suggestions: []
 })
 
 // Deep Muted colors for perfect Dark Mode contrast
@@ -144,22 +166,39 @@ const commentInputRef = ref(null)
 // --- Context Menu Handlers ---
 function handleContextMenu(event) {
   if (!editor.value) return
-  
-  // Only show menu if text is selected or if clicking on an existing comment
+
   const { empty } = editor.value.state.selection
   const isCommentNode = event.target.closest('.editor-comment')
+  const isSpellingError = event.target.classList.contains('spelling-error')
 
-  if (!empty || isCommentNode) {
-    // Prevent default browser right-click menu
+  if (!empty || isCommentNode || isSpellingError) {
     event.preventDefault() 
-    
-    // Position the menu at mouse coordinates
+
+    // Calculate precise ProseMirror position for word replacement
+    let pos = null
+    if (isSpellingError && event.target.firstChild) {
+      pos = editor.value.view.posAtDOM(event.target.firstChild, 0)
+    }
+
+    const word = isSpellingError ? event.target.dataset.word : ''
+
     contextMenu.value = {
       show: true,
       x: event.clientX,
       y: event.clientY,
-      mode: 'menu',
-      commentText: ''
+      mode: isSpellingError ? 'spelling' : 'menu',
+      commentText: '',
+      word: word,
+      pos: pos,
+      suggestions: []
+    }
+
+    if (isSpellingError) {
+      getSuggestions(word).then(suggs => {
+        if (contextMenu.value.show && contextMenu.value.mode === 'spelling') {
+          contextMenu.value.suggestions = suggs.slice(0, 5) // Top 5 suggestions
+        }
+      })
     }
   } else {
     contextMenu.value.show = false
@@ -207,6 +246,31 @@ function removeComment() {
   contextMenu.value.show = false
 }
 
+function applySuggestion(suggestion) {
+  if (contextMenu.value.pos !== null) {
+    editor.value.chain()
+      .focus()
+      .deleteRange({ from: contextMenu.value.pos, to: contextMenu.value.pos + contextMenu.value.word.length })
+      .insertContentAt(contextMenu.value.pos, suggestion)
+      .run()
+  }
+  contextMenu.value.show = false
+}
+
+async function handleAddWordContext() {
+  const word = contextMenu.value.word
+  if (!word) return
+  contextMenu.value.show = false
+
+  try {
+    await post('/api/dictionary', { word })
+    addWord(word)
+    if (editor.value) checkDocument(editor.value.state.doc)
+  } catch (err) {
+    console.error('Failed to add word:', err)
+  }
+}
+
 const showVersionHistory = ref(false)
 const isSavingMilestone = ref(false)
 const estimatedReadingTime = ref('1 min')
@@ -243,7 +307,22 @@ const { isSaving, lastSavedAt, hasUnsavedChanges, triggerSave, recoverDraft } = 
 )
 
 // Spell check integration
-const { isReady: spellCheckReady, misspelledRanges, checkDocument, addWord, terminate: terminateSpellCheck } = useSpellCheck()
+const { 
+  isReady: spellCheckReady, 
+  misspelledRanges, 
+  checkDocument, 
+  addWord, 
+  terminate: terminateSpellCheck,
+  getSuggestions // CRUCIAL FIX: Added missing getSuggestions
+} = useSpellCheck()
+
+// CRUCIAL FIX: Watch for the exact moment the dictionary worker is ready, then trigger the initial spellcheck
+watch(spellCheckReady, (isReady) => {
+  if (isReady && editor.value) {
+    console.log('[TipTapEditor] Spellchecker is ready. Running initial check...')
+    checkDocument(editor.value.state.doc)
+  }
+})
 
 // Watch for spell check results and apply decorations
 watch(misspelledRanges, (ranges) => {
@@ -282,18 +361,7 @@ function onTitleUpdate() {
 }
 
 function onEditorClick(event) {
-  // Handle Spellcheck (existing)
-  if (event.target && event.target.classList.contains('spelling-error')) {
-    const word = event.target.dataset.word
-    if (word) {
-      tooltip.value = { show: true, x: event.clientX, y: event.clientY + 20, word }
-      commentTooltip.value.show = false
-      return
-    }
-  }
-  tooltip.value.show = false
-
-  // Handle Inline Comments (New)
+  // Handle Inline Comments ONLY
   const commentNode = event.target.closest('.editor-comment')
   if (commentNode) {
     const commentText = commentNode.getAttribute('data-comment')
@@ -303,24 +371,6 @@ function onEditorClick(event) {
     }
   }
   commentTooltip.value.show = false
-}
-
-async function handleAddWord() {
-  const word = tooltip.value.word
-  if (!word) return
-
-  tooltip.value.show = false
-
-  try {
-    await post('/api/dictionary', { word })
-    addWord(word)
-    // Re-check document to clear underline
-    if (editor.value) {
-      checkDocument(editor.value.state.doc)
-    }
-  } catch (err) {
-    console.error('Failed to add word to dictionary:', err)
-  }
 }
 
 async function loadChapter() {
@@ -566,42 +616,6 @@ onBeforeUnmount(() => {
   color: #ef4444;
 }
 
-.spell-tooltip {
-  position: fixed;
-  background-color: #27272a;
-  border: 1px solid #3f3f46;
-  border-radius: 6px;
-  padding: 0.5rem;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  z-index: 50;
-}
-
-.misspelled-word {
-  color: #f87171;
-  font-family: 'Inter', sans-serif;
-  font-size: 0.875rem;
-  font-weight: 500;
-  text-align: center;
-}
-
-.btn-add-word {
-  background-color: #3f3f46;
-  color: #e4e4e7;
-  border: none;
-  padding: 0.25rem 0.5rem;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 0.75rem;
-  font-family: 'Inter', sans-serif;
-  transition: background-color 0.2s;
-}
-
-.btn-add-word:hover {
-  background-color: #52525b;
-}
 
 /* Scoped styles */
 .comment-tooltip {
@@ -701,6 +715,10 @@ onBeforeUnmount(() => {
 
 .text-red {
   color: #f87171 !important;
+}
+
+.text-blue {
+  color: #60a5fa !important;
 }
 
 .context-input-wrapper {
