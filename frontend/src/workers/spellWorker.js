@@ -72,6 +72,19 @@ function checkText(text, id) {
  * Handle incoming messages from the main thread.
  */
 self.addEventListener('message', (e) => {
+  if (e.data.action === 'suggest') {
+    let suggestions = []
+    if (spell) {
+      suggestions = spell.suggest(e.data.word)
+    }
+    self.postMessage({ 
+      action: 'suggest_result', 
+      id: e.data.id, 
+      suggestions: suggestions 
+    })
+    return
+  }
+
   const { type, text, id, word, customWords } = e.data
 
   switch (type) {
