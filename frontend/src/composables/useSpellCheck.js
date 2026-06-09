@@ -9,6 +9,7 @@ import { get } from './useApi.js'
 export function useSpellCheck() {
   const isReady = ref(false)
   const misspelledRanges = ref([]) // Array of { from, to, word }
+  const pendingSuggestions = new Map()
 
   let worker = null
   let debounceTimer = null
@@ -38,17 +39,34 @@ export function useSpellCheck() {
       worker.postMessage({ type: 'init', customWords })
 
       worker.addEventListener('message', (e) => {
-        const { type, misspelled, id } = e.data
-
-        if (type === 'ready') {
-          isReady.value = true
-        } else if (type === 'results') {
-          // Only process the latest check
-          if (id === checkId) {
-            misspelledRanges.value = misspelled || []
+        // 1. Handle Suggestion Results
+        if (e.data.action === 'suggest_result') {
+          const resolve = pendingSuggestions.get(e.data.id)
+          if (resolve) {
+            resolve(e.data.suggestions)
+            pendingSuggestions.delete(e.data.id)
           }
-        } else if (type === 'error') {
-          console.warn('[spellCheck]', e.data.message)
+          return
+        }
+
+        // 2. Handle Initialization Ready State (CRUCIAL FOR RED LINES)
+        if (e.data.type === 'ready') {
+          isReady.value = true
+          // Optional: re-check the document immediately once ready
+          console.log('[spellCheck] Worker is ready!')
+        } 
+        
+        // 3. Handle Initialization Errors
+        else if (e.data.type === 'error') {
+          console.error('[spellCheck worker error]:', e.data.message)
+        }
+        
+        // 4. Handle Check Results
+        else if (e.data.type === 'results') {
+          // Only process the latest check
+          if (e.data.id === checkId) {
+            misspelledRanges.value = e.data.misspelled || []
+          }
         }
       })
     } catch (err) {
@@ -142,11 +160,20 @@ export function useSpellCheck() {
 
   onUnmounted(terminate)
 
+  function getSuggestions(word) {
+    return new Promise(resolve => {
+      const id = Date.now().toString() + Math.random()
+      pendingSuggestions.set(id, resolve)
+      worker.postMessage({ action: 'suggest', id, word })
+    })
+  }
+
   return {
     isReady,
     misspelledRanges,
     checkDocument,
     addWord,
     terminate,
+    getSuggestions,
   }
 }
