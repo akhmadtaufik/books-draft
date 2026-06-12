@@ -53,6 +53,18 @@
           <button v-else class="context-menu-btn" @click="openCommentInput">
             💬 Add Comment
           </button>
+
+          <div class="context-menu-divider"></div>
+          
+          <button class="context-menu-btn" @click="handleCopy">
+            📋 Copy
+          </button>
+          <button class="context-menu-btn" @click="handlePaste">
+            📄 Paste (with formatting)
+          </button>
+          <button class="context-menu-btn" @click="handlePastePlain">
+            📝 Paste (without formatting)
+          </button>
         </template>
 
         <template v-else-if="contextMenu.mode === 'comment-input'">
@@ -216,6 +228,67 @@ onMounted(() => document.addEventListener('click', closeContextMenu))
 onBeforeUnmount(() => document.removeEventListener('click', closeContextMenu))
 
 // --- Action Functions ---
+async function handleCopy() {
+  try {
+    // Focus the editor to ensure the selection is active, then execute native copy
+    editor.value.chain().focus().run()
+    document.execCommand('copy')
+  } catch (err) {
+    console.error('Copy failed:', err)
+  }
+  contextMenu.value.show = false
+}
+
+async function handlePaste() {
+  try {
+    editor.value.chain().focus().run()
+    
+    // Attempt to read rich text via modern Clipboard API
+    const clipboardItems = await navigator.clipboard.read()
+    let htmlContent = null
+    let textContent = null
+
+    for (const item of clipboardItems) {
+      if (item.types.includes('text/html')) {
+        const blob = await item.getType('text/html')
+        htmlContent = await blob.text()
+      }
+      if (item.types.includes('text/plain')) {
+        const blob = await item.getType('text/plain')
+        textContent = await blob.text()
+      }
+    }
+
+    if (htmlContent) {
+      editor.value.commands.insertContent(htmlContent)
+    } else if (textContent) {
+      editor.value.commands.insertContent(textContent)
+    }
+  } catch (err) {
+    console.warn('Rich text paste failed or requires permission. Falling back to plain text...', err)
+    try {
+      const text = await navigator.clipboard.readText()
+      editor.value.commands.insertContent(text)
+    } catch (fallbackErr) {
+      alert('Browser blocked clipboard access. Please use Ctrl+V to paste.')
+    }
+  }
+  contextMenu.value.show = false
+}
+
+async function handlePastePlain() {
+  try {
+    editor.value.chain().focus().run()
+    // Specifically request plain text
+    const text = await navigator.clipboard.readText()
+    editor.value.commands.insertContent(text)
+  } catch (err) {
+    console.error('Plain text paste failed:', err)
+    alert('Browser blocked clipboard access. Please use Ctrl+Shift+V to paste plain text.')
+  }
+  contextMenu.value.show = false
+}
+
 function applyHighlight(color) {
   editor.value.chain().focus().setHighlight({ color }).run()
   contextMenu.value.show = false
